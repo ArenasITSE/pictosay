@@ -57,6 +57,7 @@ private val LightPurple = Color(0xFFF0E9FF)
 fun FavoritesScreen(
     onBack: () -> Unit,
     onSpeak: (String) -> Unit,
+    onOpenTutor: () -> Unit,
     repository: PicToSayRepository
 ) {
 
@@ -425,6 +426,7 @@ fun FavoritesScreen(
                             tutorUnlocked = true
                             showPinDialog = false
                             pin = ""
+                            onOpenTutor()
                         } else {
                             pinError = true
                         }

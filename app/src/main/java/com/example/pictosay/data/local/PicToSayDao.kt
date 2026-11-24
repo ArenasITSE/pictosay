@@ -1,4 +1,3 @@
-
 package com.example.pictosay.data.local
 
 import androidx.room.Dao
@@ -6,11 +5,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import kotlinx.coroutines.flow.Flow
 import androidx.room.Transaction
-// ========================================
-// MODELO DE CONSULTA DE FAVORITOS
-// ========================================
+import kotlinx.coroutines.flow.Flow
 
 data class FavoriteMessageItem(
     val favoriteId: Int,
@@ -22,15 +18,15 @@ data class FavoriteMessageItem(
 @Dao
 interface PicToSayDao {
 
-    // ========================================
     // CATEGORÍAS / AMBIENTES
-    // ========================================
-
     @Query("SELECT * FROM categories ORDER BY sortOrder ASC")
     fun observeCategories(): Flow<List<CategoryEntity>>
 
     @Query("SELECT * FROM categories ORDER BY sortOrder ASC")
     suspend fun getCategories(): List<CategoryEntity>
+
+    @Query("SELECT * FROM categories WHERE id = :id LIMIT 1")
+    suspend fun getCategoryById(id: Int): CategoryEntity?
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCategory(category: CategoryEntity): Long
@@ -38,11 +34,25 @@ interface PicToSayDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertCategories(categories: List<CategoryEntity>)
 
+    @Update
+    suspend fun updateCategory(category: CategoryEntity)
 
-    // ========================================
+    @Query("DELETE FROM pictograms WHERE categoryId = :categoryId")
+    suspend fun deletePictogramsByCategory(categoryId: Int)
+
+    @Query("DELETE FROM categories WHERE id = :id")
+    suspend fun deleteCategory(id: Int)
+
+    @Transaction
+    suspend fun deleteCategoryWithPictograms(id: Int) {
+        deletePictogramsByCategory(id)
+        deleteCategory(id)
+    }
+
+    @Query("SELECT COUNT(*) FROM categories")
+    suspend fun getCategoryCount(): Int
+
     // PERFIL DEL NIÑO
-    // ========================================
-
     @Query("SELECT * FROM child_profiles LIMIT 1")
     fun observeChildProfile(): Flow<ChildProfileEntity?>
 
@@ -55,26 +65,12 @@ interface PicToSayDao {
     @Query("DELETE FROM child_profiles")
     suspend fun deleteChildProfile()
 
-
-    // ========================================
     // PICTOGRAMAS
-    // ========================================
-
-    @Query("""
-        SELECT * FROM pictograms
-        WHERE isActive = 1
-        ORDER BY name ASC
-    """)
+    @Query("SELECT * FROM pictograms WHERE isActive = 1 ORDER BY name ASC")
     fun observePictograms(): Flow<List<PictogramEntity>>
 
-    @Query("""
-        SELECT * FROM pictograms
-        WHERE categoryId = :categoryId AND isActive = 1
-        ORDER BY name ASC
-    """)
-    fun observePictogramsByCategory(
-        categoryId: Int
-    ): Flow<List<PictogramEntity>>
+    @Query("SELECT * FROM pictograms WHERE categoryId = :categoryId AND isActive = 1 ORDER BY name ASC")
+    fun observePictogramsByCategory(categoryId: Int): Flow<List<PictogramEntity>>
 
     @Query("SELECT * FROM pictograms WHERE id = :id LIMIT 1")
     suspend fun getPictogramById(id: Int): PictogramEntity?
@@ -94,11 +90,20 @@ interface PicToSayDao {
     @Query("SELECT COUNT(*) FROM pictograms")
     suspend fun getPictogramCount(): Int
 
+    // ADMINISTRACIÓN DE PICTOGRAMAS
+    @Query("SELECT * FROM pictograms WHERE categoryId = :categoryId ORDER BY name ASC")
+    fun observeAllPictogramsByCategory(categoryId: Int): Flow<List<PictogramEntity>>
 
-    // ========================================
+    @Query("UPDATE pictograms SET isActive = 0 WHERE id = :id")
+    suspend fun deactivatePictogram(id: Int)
+
+    @Query("UPDATE pictograms SET isActive = 1 WHERE id = :id")
+    suspend fun activatePictogram(id: Int)
+
+    @Query("SELECT * FROM pictograms WHERE categoryId = :categoryId AND isActive = 0")
+    suspend fun getInactivePictograms(categoryId: Int): List<PictogramEntity>
+
     // MENSAJES
-    // ========================================
-
     @Query("SELECT * FROM messages ORDER BY createdAt DESC")
     fun observeMessages(): Flow<List<MessageEntity>>
 
@@ -111,58 +116,56 @@ interface PicToSayDao {
     @Query("DELETE FROM messages WHERE id = :id")
     suspend fun deleteMessage(id: Int)
 
+    // EMOCIONES
+    @Query("SELECT * FROM emotions WHERE isActive = 1 ORDER BY sortOrder ASC, name ASC")
+    fun observeEmotions(): Flow<List<EmotionEntity>>
 
-    // ========================================
+    @Query("SELECT * FROM emotions ORDER BY sortOrder ASC, name ASC")
+    fun observeAllEmotions(): Flow<List<EmotionEntity>>
+
+    @Query("SELECT * FROM emotions WHERE id = :id LIMIT 1")
+    suspend fun getEmotionById(id: Int): EmotionEntity?
+
+    @Query("SELECT EXISTS(SELECT 1 FROM emotions WHERE name = :name)")
+    suspend fun emotionExistsByName(name: String): Boolean
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEmotion(emotion: EmotionEntity): Long
+
+    @Update
+    suspend fun updateEmotion(emotion: EmotionEntity)
+
+    @Query("UPDATE emotions SET isActive = 0 WHERE id = :id")
+    suspend fun deactivateEmotion(id: Int)
+
+    @Query("DELETE FROM emotions WHERE id = :id")
+    suspend fun deleteEmotion(id: Int)
+
     // FAVORITOS
-    // ========================================
-
     @Query("SELECT * FROM favorites ORDER BY createdAt DESC")
     fun observeFavorites(): Flow<List<FavoriteEntity>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addFavorite(favorite: FavoriteEntity): Long
 
-    @Query("""
-        DELETE FROM favorites
-        WHERE targetType = :targetType AND targetId = :targetId
-    """)
-    suspend fun removeFavorite(
-        targetType: String,
-        targetId: Int
-    )
+    @Query("DELETE FROM favorites WHERE targetType = :targetType AND targetId = :targetId")
+    suspend fun removeFavorite(targetType: String, targetId: Int)
+
+    @Query("SELECT EXISTS(SELECT 1 FROM favorites WHERE targetType = :targetType AND targetId = :targetId)")
+    suspend fun isFavorite(targetType: String, targetId: Int): Boolean
 
     @Query("""
-        SELECT EXISTS(
-            SELECT 1 FROM favorites
-            WHERE targetType = :targetType AND targetId = :targetId
-        )
-    """)
-    suspend fun isFavorite(
-        targetType: String,
-        targetId: Int
-    ): Boolean
-
-    // Consultar favoritos personalizados junto con su mensaje y emoji
-    @Query("""
-        SELECT
-            f.id AS favoriteId,
-            m.id AS messageId,
-            m.title AS emoji,
-            m.content AS content
+        SELECT f.id AS favoriteId, m.id AS messageId,
+               m.title AS emoji, m.content AS content
         FROM favorites AS f
-        INNER JOIN messages AS m
-            ON f.targetId = m.id
+        INNER JOIN messages AS m ON f.targetId = m.id
         WHERE f.targetType = 'MESSAGE'
         ORDER BY f.createdAt DESC
     """)
     fun observeFavoriteMessages(): Flow<List<FavoriteMessageItem>>
 
     @Transaction
-    suspend fun insertFavoriteMessage(
-        emoji: String,
-        content: String
-    ): Long {
-
+    suspend fun insertFavoriteMessage(emoji: String, content: String): Long {
         val messageId = insertMessage(
             MessageEntity(
                 title = emoji,
@@ -170,46 +173,23 @@ interface PicToSayDao {
                 creationType = "PICTOGRAM"
             )
         )
-
         val favoriteId = addFavorite(
-            FavoriteEntity(
-                targetType = "MESSAGE",
-                targetId = messageId.toInt()
-            )
+            FavoriteEntity(targetType = "MESSAGE", targetId = messageId.toInt())
         )
-
         if (favoriteId == -1L) {
             deleteMessage(messageId.toInt())
             error("No se pudo guardar el favorito.")
         }
-
         return messageId
     }
 
-    // Contar favoritos personalizados
-    @Query("""
-        SELECT COUNT(*)
-        FROM favorites
-        WHERE targetType = 'MESSAGE'
-    """)
+    @Query("SELECT COUNT(*) FROM favorites WHERE targetType = 'MESSAGE'")
     suspend fun getFavoriteMessageCount(): Int
 
-    // Recuperar un favorito por su ID
-    @Query("""
-        SELECT * FROM favorites
-        WHERE targetType = 'MESSAGE'
-        AND targetId = :messageId
-        LIMIT 1
-    """)
-    suspend fun getFavoriteMessageById(
-        messageId: Int
-    ): FavoriteEntity?
+    @Query("SELECT * FROM favorites WHERE targetType = 'MESSAGE' AND targetId = :messageId LIMIT 1")
+    suspend fun getFavoriteMessageById(messageId: Int): FavoriteEntity?
 
-
-    // ========================================
-    // TAREAS
-    // ========================================
-
+    // TAREAS / RUTINAS
     @Query("SELECT * FROM tasks ORDER BY createdAt DESC")
     fun observeTasks(): Flow<List<TaskEntity>>
 
@@ -225,27 +205,15 @@ interface PicToSayDao {
     @Query("DELETE FROM tasks WHERE id = :id")
     suspend fun deleteTask(id: Int)
 
-    @Query("""
-        UPDATE tasks
-        SET isCompleted = 1, completedAt = :completedAt
-        WHERE id = :taskId AND isCompleted = 0
-    """)
+    @Query("UPDATE tasks SET isCompleted = 1, completedAt = :completedAt WHERE id = :taskId AND isCompleted = 0")
     suspend fun completeTask(
         taskId: Int,
         completedAt: Long = System.currentTimeMillis()
     ): Int
 
-    @Query("""
-        SELECT COALESCE(SUM(starsReward), 0)
-        FROM tasks
-        WHERE isCompleted = 1
-    """)
+    @Query("SELECT COALESCE(SUM(starsReward), 0) FROM tasks WHERE isCompleted = 1")
     fun observeTotalStars(): Flow<Int>
 
-    @Query("""
-        SELECT COUNT(*) FROM tasks
-        WHERE isCompleted = 1
-    """)
+    @Query("SELECT COUNT(*) FROM tasks WHERE isCompleted = 1")
     fun observeCompletedTasks(): Flow<Int>
-
 }

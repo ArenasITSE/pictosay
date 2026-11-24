@@ -3,6 +3,7 @@ package com.example.pictosay.data.repository
 
 import com.example.pictosay.data.local.CategoryEntity
 import com.example.pictosay.data.local.ChildProfileEntity
+import com.example.pictosay.data.local.EmotionEntity
 import com.example.pictosay.data.local.FavoriteEntity
 import com.example.pictosay.data.local.FavoriteMessageItem
 import com.example.pictosay.data.local.MessageEntity
@@ -22,6 +23,21 @@ class PicToSayRepository(
     val categories: Flow<List<CategoryEntity>> =
         dao.observeCategories()
 
+    suspend fun getCategoryById(id: Int): CategoryEntity? {
+        return dao.getCategoryById(id)
+    }
+
+    suspend fun addCategory(category: CategoryEntity) {
+        dao.insertCategories(listOf(category))
+    }
+
+    suspend fun updateCategory(category: CategoryEntity) {
+        dao.updateCategory(category)
+    }
+
+    suspend fun deleteCategory(id: Int) {
+        dao.deleteCategoryWithPictograms(id)
+    }
 
     // ========================================
     // PERFIL DEL NIÑO
@@ -43,23 +59,158 @@ class PicToSayRepository(
     // PICTOGRAMAS
     // ========================================
 
+    // Todos los pictogramas activos
     val pictograms: Flow<List<PictogramEntity>> =
         dao.observePictograms()
 
+    // Pictogramas activos de un ambiente
     fun getPictogramsByCategory(
         categoryId: Int
     ): Flow<List<PictogramEntity>> {
         return dao.observePictogramsByCategory(categoryId)
     }
 
-    suspend fun addPictogram(pictogram: PictogramEntity) {
-        dao.insertPictogram(pictogram)
+    // Todos los pictogramas de un ambiente,
+    // incluidos los desactivados (administración)
+    fun getAllPictogramsByCategory(
+        categoryId: Int
+    ): Flow<List<PictogramEntity>> {
+        return dao.observeAllPictogramsByCategory(categoryId)
     }
 
+    // Consultar un pictograma por ID
+    suspend fun getPictogramById(
+        id: Int
+    ): PictogramEntity? {
+        return dao.getPictogramById(id)
+    }
+
+    // Agregar pictograma
+    suspend fun addPictogram(
+        pictogram: PictogramEntity
+    ): Long {
+        return dao.insertPictogram(pictogram)
+    }
+
+    // Actualizar pictograma
+    suspend fun updatePictogram(
+        pictogram: PictogramEntity
+    ) {
+        dao.updatePictogram(pictogram)
+    }
+
+    // Activar o desactivar pictograma
+    suspend fun togglePictogram(
+        pictogram: PictogramEntity
+    ) {
+        if (pictogram.isActive) {
+            dao.deactivatePictogram(pictogram.id)
+        } else {
+            dao.activatePictogram(pictogram.id)
+        }
+    }
+
+    // Desactivar pictograma
+    suspend fun deactivatePictogram(id: Int) {
+        dao.deactivatePictogram(id)
+    }
+
+    // Activar pictograma
+    suspend fun activatePictogram(id: Int) {
+        dao.activatePictogram(id)
+    }
+
+    // Eliminar pictograma permanentemente
     suspend fun deletePictogram(id: Int) {
         dao.deletePictogram(id)
     }
 
+    // Consultar pictogramas desactivados
+    suspend fun getInactivePictograms(
+        categoryId: Int
+    ): List<PictogramEntity> {
+        return dao.getInactivePictograms(categoryId)
+    }
+
+    // ========================================
+    // EMOCIONES
+    // ========================================
+
+    val emotions: Flow<List<EmotionEntity>> =
+        dao.observeEmotions()
+
+    val allEmotions: Flow<List<EmotionEntity>> =
+        dao.observeAllEmotions()
+
+    suspend fun getEmotionById(id: Int): EmotionEntity? {
+        return dao.getEmotionById(id)
+    }
+
+
+    // ========================================
+    // EMOCIONES PREDETERMINADAS
+    // ========================================
+
+    suspend fun initializeDefaultEmotions() {
+        val defaultEmotions = listOf(
+            EmotionEntity(name = "Estoy feliz", emoji = "😊", speechText = "Estoy feliz", description = "Me siento feliz", sortOrder = 1),
+            EmotionEntity(name = "Estoy triste", emoji = "😢", speechText = "Estoy triste", description = "Me siento triste", sortOrder = 2),
+            EmotionEntity(name = "Estoy enojado", emoji = "😠", speechText = "Estoy enojado", description = "Me siento enojado", sortOrder = 3),
+            EmotionEntity(name = "Tengo miedo", emoji = "😨", speechText = "Tengo miedo", description = "Siento miedo", sortOrder = 4),
+            EmotionEntity(name = "Estoy sorprendido", emoji = "😮", speechText = "Estoy sorprendido", description = "Algo me sorprendió", sortOrder = 5),
+            EmotionEntity(name = "Estoy cansado", emoji = "😴", speechText = "Estoy cansado", description = "Necesito descansar", sortOrder = 6),
+            EmotionEntity(name = "Estoy tranquilo", emoji = "😌", speechText = "Estoy tranquilo", description = "Me siento tranquilo", sortOrder = 7),
+            EmotionEntity(name = "Estoy emocionado", emoji = "🤩", speechText = "Estoy emocionado", description = "Estoy muy emocionado", sortOrder = 8)
+        )
+
+        defaultEmotions.forEach { emotion ->
+            if (!dao.emotionExistsByName(emotion.name)) {
+                dao.insertEmotion(emotion)
+            }
+        }
+    }
+
+    suspend fun addEmotion(emotion: EmotionEntity): Long {
+        require(emotion.name.isNotBlank()) {
+            "La emoción necesita un nombre."
+        }
+
+        require(emotion.speechText.isNotBlank()) {
+            "La emoción necesita una frase para reproducir."
+        }
+
+        return dao.insertEmotion(emotion)
+    }
+
+    suspend fun updateEmotion(emotion: EmotionEntity) {
+        require(emotion.name.isNotBlank()) {
+            "La emoción necesita un nombre."
+        }
+
+        require(emotion.speechText.isNotBlank()) {
+            "La emoción necesita una frase para reproducir."
+        }
+
+        dao.updateEmotion(emotion)
+    }
+
+    /**
+     * Activa o desactiva una emoción sin eliminarla.
+     * La actualización conserva todos sus demás datos.
+     */
+    suspend fun toggleEmotion(emotion: EmotionEntity) {
+        dao.updateEmotion(
+            emotion.copy(isActive = !emotion.isActive)
+        )
+    }
+
+    suspend fun deactivateEmotion(id: Int) {
+        dao.deactivateEmotion(id)
+    }
+
+    suspend fun deleteEmotion(id: Int) {
+        dao.deleteEmotion(id)
+    }
 
     // ========================================
     // MENSAJES
@@ -75,7 +226,6 @@ class PicToSayRepository(
     suspend fun deleteMessage(id: Int) {
         dao.deleteMessage(id)
     }
-
 
     // ========================================
     // FAVORITOS GENERALES
@@ -110,28 +260,13 @@ class PicToSayRepository(
         return dao.isFavorite(targetType, targetId)
     }
 
-
     // ========================================
     // FAVORITOS PERSONALIZADOS DEL TUTOR
     // ========================================
 
-    /**
-     * Lista de favoritos personalizados.
-     * Recupera el emoji y el mensaje desde Room.
-     */
     val favoriteMessages: Flow<List<FavoriteMessageItem>> =
         dao.observeFavoriteMessages()
 
-
-    /**
-     * Guarda un mensaje personalizado del tutor.
-     *
-     * El emoji se almacena en title.
-     * El mensaje se almacena en content.
-     *
-     * El DAO realiza ambas inserciones dentro
-     * de una transacción.
-     */
     suspend fun saveFavoriteMessage(
         emoji: String,
         message: String
@@ -151,15 +286,7 @@ class PicToSayRepository(
         )
     }
 
-
-    /**
-     * Elimina un favorito personalizado.
-     *
-     * Primero elimina su relación con favoritos
-     * y después elimina el mensaje.
-     */
     suspend fun removeFavoriteMessage(messageId: Int) {
-
         dao.removeFavorite(
             targetType = "MESSAGE",
             targetId = messageId
@@ -168,21 +295,11 @@ class PicToSayRepository(
         dao.deleteMessage(messageId)
     }
 
-
-    /**
-     * Devuelve la cantidad de favoritos personalizados.
-     */
     suspend fun getFavoriteMessageCount(): Int {
         return dao.getFavoriteMessageCount()
     }
 
-
-    /**
-     * Inserta los favoritos iniciales si todavía
-     * no existen favoritos personalizados.
-     */
     suspend fun initializeDefaultFavorites() {
-
         if (dao.getFavoriteMessageCount() == 0) {
 
             val defaults = listOf(
@@ -194,7 +311,6 @@ class PicToSayRepository(
             )
 
             defaults.forEach { (emoji, message) ->
-
                 saveFavoriteMessage(
                     emoji = emoji,
                     message = message
@@ -203,9 +319,8 @@ class PicToSayRepository(
         }
     }
 
-
     // ========================================
-    // TAREAS Y ESTRELLAS
+    // RUTINAS Y ESTRELLAS
     // ========================================
 
     val tasks: Flow<List<TaskEntity>> =
@@ -218,10 +333,18 @@ class PicToSayRepository(
         dao.observeCompletedTasks()
 
     suspend fun addTask(task: TaskEntity): Long {
+        require(task.title.isNotBlank()) {
+            "La rutina necesita un título."
+        }
+
         return dao.insertTask(task)
     }
 
     suspend fun updateTask(task: TaskEntity) {
+        require(task.title.isNotBlank()) {
+            "La rutina necesita un título."
+        }
+
         dao.updateTask(task)
     }
 
@@ -229,13 +352,6 @@ class PicToSayRepository(
         dao.deleteTask(id)
     }
 
-
-    /**
-     * Marca una tarea como completada.
-     *
-     * Devuelve las estrellas ganadas.
-     * Si ya estaba completada, devuelve 0.
-     */
     suspend fun completeTask(taskId: Int): Int {
 
         val task = dao.getTaskById(taskId) ?: return 0
@@ -253,15 +369,24 @@ class PicToSayRepository(
         }
     }
 
-
     // ========================================
     // DATOS INICIALES
     // ========================================
 
     suspend fun initializeDefaultData() {
 
+        // Las emociones se inicializan aunque ya existan ambientes.
+        initializeDefaultEmotions()
+
+        // Los ambientes y pictogramas iniciales
+        // solamente se crean en una base de datos nueva.
+
+        if (dao.getCategoryCount() > 0) {
+            return
+        }
+
         // ------------------------------------
-        // CATEGORÍAS / AMBIENTES
+        // AMBIENTES PREDETERMINADOS
         // ------------------------------------
 
         val defaultCategories = listOf(
@@ -317,217 +442,193 @@ class PicToSayRepository(
 
         dao.insertCategories(defaultCategories)
 
-
         // ------------------------------------
         // PICTOGRAMAS INICIALES
         // ------------------------------------
 
-        // Evita duplicar los pictogramas
-        // al abrir nuevamente la aplicación.
+        val defaultPictograms = listOf(
 
-        if (dao.getPictogramCount() == 0) {
+            // MI CUARTO
 
-            val defaultPictograms = listOf(
+            PictogramEntity(
+                name = "Cama",
+                emoji = "🛏️",
+                categoryId = 1,
+                speechText = "Cama"
+            ),
 
-                // ====================================
-                // MI CUARTO
-                // ====================================
+            PictogramEntity(
+                name = "Almohada",
+                emoji = "🛌",
+                categoryId = 1,
+                speechText = "Almohada"
+            ),
 
-                PictogramEntity(
-                    name = "Cama",
-                    emoji = "🛏️",
-                    categoryId = 1,
-                    speechText = "Cama"
-                ),
+            PictogramEntity(
+                name = "Juguete",
+                emoji = "🧸",
+                categoryId = 1,
+                speechText = "Juguete"
+            ),
 
-                PictogramEntity(
-                    name = "Almohada",
-                    emoji = "🛌",
-                    categoryId = 1,
-                    speechText = "Almohada"
-                ),
+            PictogramEntity(
+                name = "Ropa",
+                emoji = "👕",
+                categoryId = 1,
+                speechText = "Ropa"
+            ),
 
-                PictogramEntity(
-                    name = "Juguete",
-                    emoji = "🧸",
-                    categoryId = 1,
-                    speechText = "Juguete"
-                ),
+            // EL BAÑO
 
-                PictogramEntity(
-                    name = "Ropa",
-                    emoji = "👕",
-                    categoryId = 1,
-                    speechText = "Ropa"
-                ),
+            PictogramEntity(
+                name = "Baño",
+                emoji = "🚽",
+                categoryId = 2,
+                speechText = "Baño"
+            ),
 
+            PictogramEntity(
+                name = "Regadera",
+                emoji = "🚿",
+                categoryId = 2,
+                speechText = "Regadera"
+            ),
 
-                // ====================================
-                // EL BAÑO
-                // ====================================
+            PictogramEntity(
+                name = "Jabón",
+                emoji = "🧼",
+                categoryId = 2,
+                speechText = "Jabón"
+            ),
 
-                PictogramEntity(
-                    name = "Baño",
-                    emoji = "🚽",
-                    categoryId = 2,
-                    speechText = "Baño"
-                ),
+            PictogramEntity(
+                name = "Cepillo de dientes",
+                emoji = "🪥",
+                categoryId = 2,
+                speechText = "Cepillo de dientes"
+            ),
 
-                PictogramEntity(
-                    name = "Regadera",
-                    emoji = "🚿",
-                    categoryId = 2,
-                    speechText = "Regadera"
-                ),
+            // LA COCINA
 
-                PictogramEntity(
-                    name = "Jabón",
-                    emoji = "🧼",
-                    categoryId = 2,
-                    speechText = "Jabón"
-                ),
+            PictogramEntity(
+                name = "Agua",
+                emoji = "💧",
+                categoryId = 3,
+                speechText = "Agua"
+            ),
 
-                PictogramEntity(
-                    name = "Cepillo de dientes",
-                    emoji = "🪥",
-                    categoryId = 2,
-                    speechText = "Cepillo de dientes"
-                ),
+            PictogramEntity(
+                name = "Manzana",
+                emoji = "🍎",
+                categoryId = 3,
+                speechText = "Manzana"
+            ),
 
+            PictogramEntity(
+                name = "Pan",
+                emoji = "🍞",
+                categoryId = 3,
+                speechText = "Pan"
+            ),
 
-                // ====================================
-                // LA COCINA
-                // ====================================
+            PictogramEntity(
+                name = "Leche",
+                emoji = "🥛",
+                categoryId = 3,
+                speechText = "Leche"
+            ),
 
-                PictogramEntity(
-                    name = "Agua",
-                    emoji = "💧",
-                    categoryId = 3,
-                    speechText = "Agua"
-                ),
+            // MI CASA Y PATIO
 
-                PictogramEntity(
-                    name = "Manzana",
-                    emoji = "🍎",
-                    categoryId = 3,
-                    speechText = "Manzana"
-                ),
+            PictogramEntity(
+                name = "Perro",
+                emoji = "🐶",
+                categoryId = 4,
+                speechText = "Perro"
+            ),
 
-                PictogramEntity(
-                    name = "Pan",
-                    emoji = "🍞",
-                    categoryId = 3,
-                    speechText = "Pan"
-                ),
+            PictogramEntity(
+                name = "Gato",
+                emoji = "🐱",
+                categoryId = 4,
+                speechText = "Gato"
+            ),
 
-                PictogramEntity(
-                    name = "Leche",
-                    emoji = "🥛",
-                    categoryId = 3,
-                    speechText = "Leche"
-                ),
+            PictogramEntity(
+                name = "Carro",
+                emoji = "🚗",
+                categoryId = 4,
+                speechText = "Carro"
+            ),
 
+            PictogramEntity(
+                name = "Pelota",
+                emoji = "⚽",
+                categoryId = 4,
+                speechText = "Pelota"
+            ),
 
-                // ====================================
-                // MI CASA Y PATIO
-                // ====================================
+            // SUPERMERCADO
 
-                PictogramEntity(
-                    name = "Perro",
-                    emoji = "🐶",
-                    categoryId = 4,
-                    speechText = "Perro"
-                ),
+            PictogramEntity(
+                name = "Plátano",
+                emoji = "🍌",
+                categoryId = 5,
+                speechText = "Plátano"
+            ),
 
-                PictogramEntity(
-                    name = "Gato",
-                    emoji = "🐱",
-                    categoryId = 4,
-                    speechText = "Gato"
-                ),
+            PictogramEntity(
+                name = "Galletas",
+                emoji = "🍪",
+                categoryId = 5,
+                speechText = "Galletas"
+            ),
 
-                PictogramEntity(
-                    name = "Carro",
-                    emoji = "🚗",
-                    categoryId = 4,
-                    speechText = "Carro"
-                ),
+            PictogramEntity(
+                name = "Jugo",
+                emoji = "🧃",
+                categoryId = 5,
+                speechText = "Jugo"
+            ),
 
-                PictogramEntity(
-                    name = "Pelota",
-                    emoji = "⚽",
-                    categoryId = 4,
-                    speechText = "Pelota"
-                ),
+            PictogramEntity(
+                name = "Carrito",
+                emoji = "🛒",
+                categoryId = 5,
+                speechText = "Carrito"
+            ),
 
+            // MI ESCUELA
 
-                // ====================================
-                // SUPERMERCADO
-                // ====================================
+            PictogramEntity(
+                name = "Mochila",
+                emoji = "🎒",
+                categoryId = 6,
+                speechText = "Mochila"
+            ),
 
-                PictogramEntity(
-                    name = "Plátano",
-                    emoji = "🍌",
-                    categoryId = 5,
-                    speechText = "Plátano"
-                ),
+            PictogramEntity(
+                name = "Libro",
+                emoji = "📚",
+                categoryId = 6,
+                speechText = "Libro"
+            ),
 
-                PictogramEntity(
-                    name = "Galletas",
-                    emoji = "🍪",
-                    categoryId = 5,
-                    speechText = "Galletas"
-                ),
+            PictogramEntity(
+                name = "Lápiz",
+                emoji = "✏️",
+                categoryId = 6,
+                speechText = "Lápiz"
+            ),
 
-                PictogramEntity(
-                    name = "Jugo",
-                    emoji = "🧃",
-                    categoryId = 5,
-                    speechText = "Jugo"
-                ),
-
-                PictogramEntity(
-                    name = "Carrito",
-                    emoji = "🛒",
-                    categoryId = 5,
-                    speechText = "Carrito"
-                ),
-
-
-                // ====================================
-                // MI ESCUELA
-                // ====================================
-
-                PictogramEntity(
-                    name = "Mochila",
-                    emoji = "🎒",
-                    categoryId = 6,
-                    speechText = "Mochila"
-                ),
-
-                PictogramEntity(
-                    name = "Libro",
-                    emoji = "📚",
-                    categoryId = 6,
-                    speechText = "Libro"
-                ),
-
-                PictogramEntity(
-                    name = "Lápiz",
-                    emoji = "✏️",
-                    categoryId = 6,
-                    speechText = "Lápiz"
-                ),
-
-                PictogramEntity(
-                    name = "Maestra",
-                    emoji = "👩‍🏫",
-                    categoryId = 6,
-                    speechText = "Maestra"
-                )
+            PictogramEntity(
+                name = "Maestra",
+                emoji = "👩‍🏫",
+                categoryId = 6,
+                speechText = "Maestra"
             )
+        )
 
-            dao.insertPictograms(defaultPictograms)
-        }
+        dao.insertPictograms(defaultPictograms)
     }
 }

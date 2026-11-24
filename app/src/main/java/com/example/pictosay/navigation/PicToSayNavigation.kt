@@ -1,4 +1,3 @@
-
 package com.example.pictosay.navigation
 
 import androidx.compose.foundation.background
@@ -20,6 +19,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.pictosay.data.local.ChildProfileEntity
+import com.example.pictosay.data.local.CategoryEntity
+import com.example.pictosay.data.local.EmotionEntity
+import com.example.pictosay.data.local.PictogramEntity
+import com.example.pictosay.data.local.TaskEntity
 import com.example.pictosay.data.repository.PicToSayRepository
 import com.example.pictosay.ui.communication.CommunicationScreen
 import com.example.pictosay.ui.components.BottomNavigation
@@ -30,8 +33,17 @@ import com.example.pictosay.ui.favorites.FavoritesScreen
 import com.example.pictosay.ui.home.ChildHomeScreen
 import com.example.pictosay.ui.splash.SplashScreen
 import com.example.pictosay.ui.tasks.TasksScreen
+import com.example.pictosay.ui.tutor.TutorDashboardScreen
+import com.example.pictosay.ui.tutor.ManageEnvironmentsScreen
+import com.example.pictosay.ui.tutor.ManagePictogramsScreen
+import com.example.pictosay.ui.tutor.ManageEmotionsScreen
+import com.example.pictosay.ui.tutor.ManageRoutinesScreen
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
-
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import com.example.pictosay.ui.environment.EnvironmentScreen
+import com.example.pictosay.ui.emotions.EmotionsScreen
 object AppRoutes {
     const val SPLASH = "splash"
     const val ONBOARDING = "onboarding"
@@ -41,6 +53,12 @@ object AppRoutes {
     const val TASKS = "tasks"
     const val EMOTIONS = "emotions"
     const val FAVORITES = "favorites"
+    const val TUTOR_DASHBOARD = "tutor_dashboard"
+    const val TUTOR_ENVIRONMENTS = "tutor_environments"
+    const val TUTOR_PICTOGRAMS = "tutor_pictograms"
+    const val TUTOR_PICTOGRAMS_WITH_ID = "tutor_pictograms/{categoryId}"
+    const val TUTOR_EMOTIONS = "tutor_emotions"
+    const val TUTOR_ROUTINES = "tutor_routines"
 }
 
 private val PrimaryBlue = Color(0xFF3978D5)
@@ -122,7 +140,7 @@ fun PicToSayNavigation(
                 )
             }
 
-            // COMUNICACIÓN
+            // COMUNICACIÓ
             composable(AppRoutes.COMMUNICATION) {
                 CommunicationScreen(
                     onBack = {
@@ -131,22 +149,25 @@ fun PicToSayNavigation(
                     onOpenEnvironments = {
                         navController.navigate(AppRoutes.ENVIRONMENT)
                     },
-                    onSpeak = onSpeak
+                    onSpeak = onSpeak,
+                    repository = repository
                 )
             }
 
-            // AMBIENTES
+
             composable(AppRoutes.ENVIRONMENT) {
                 EnvironmentScreen(
+                    repository = repository,
                     onBack = {
                         navController.popBackStack()
                     },
                     onSpeak = onSpeak,
                     onAddPhrase = { phrase ->
-                        // Pendiente: compartir frase con el constructor.
+                        // Se conserva el callback para futuras funciones.
                     }
                 )
             }
+
 
             // RUTINAS
             composable(AppRoutes.TASKS) {
@@ -157,18 +178,27 @@ fun PicToSayNavigation(
                 )
             }
 
-            // EMOCIONES
+
+
             composable(AppRoutes.EMOTIONS) {
+
+                val emotions by repository.emotions.collectAsState(
+                    initial = emptyList()
+                )
+
                 EmotionsScreen(
+                    emotions = emotions,
                     onBack = {
                         navController.popBackStack()
                     },
                     onSpeak = onSpeak,
                     onAddPhrase = { phrase ->
-                        // Pendiente: compartir frase con el constructor.
+                        // Se conserva el callback para futuras funciones.
                     }
                 )
             }
+
+
 
             // FAVORITOS
             composable(AppRoutes.FAVORITES) {
@@ -177,7 +207,194 @@ fun PicToSayNavigation(
                         navController.popBackStack()
                     },
                     onSpeak = onSpeak,
+                    onOpenTutor = {
+                        navController.navigate(AppRoutes.TUTOR_DASHBOARD)
+                    },
                     repository = repository
+                )
+            }
+
+            // ========================================
+            // PANEL DEL TUTOR
+            // ========================================
+
+            composable(AppRoutes.TUTOR_DASHBOARD) {
+                TutorDashboardScreen(
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onManageEnvironments = {
+                        navController.navigate(AppRoutes.TUTOR_ENVIRONMENTS)
+                    },
+                    onManagePictograms = {
+                        navController.navigate(AppRoutes.TUTOR_ENVIRONMENTS)
+                    },
+                    onManageEmotions = {
+                        navController.navigate(AppRoutes.TUTOR_EMOTIONS)
+                    },
+                    onManageRoutines = {
+                        navController.navigate(AppRoutes.TUTOR_ROUTINES)
+                    }
+                )
+            }
+
+            // ADMINISTRAR AMBIENTES
+            composable(AppRoutes.TUTOR_ENVIRONMENTS) {
+                val categories by repository.categories.collectAsState(
+                    initial = emptyList()
+                )
+                val scope = rememberCoroutineScope()
+
+                ManageEnvironmentsScreen(
+                    categories = categories,
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onAddCategory = { category ->
+                        scope.launch {
+                            repository.addCategory(category)
+                        }
+                    },
+                    onUpdateCategory = { category ->
+                        scope.launch {
+                            repository.updateCategory(category)
+                        }
+                    },
+                    onDeleteCategory = { categoryId ->
+                        scope.launch {
+                            repository.deleteCategory(categoryId)
+                        }
+                    },
+                    onManagePictograms = { category ->
+                        navController.navigate("tutor_pictograms/${category.id}")
+                    }
+                )
+            }
+
+            // ADMINISTRAR PICTOGRAMAS DE UN AMBIENTE
+            composable(AppRoutes.TUTOR_PICTOGRAMS_WITH_ID) { entry ->
+                val categoryId = entry.arguments
+                    ?.getString("categoryId")
+                    ?.toIntOrNull()
+
+                if (categoryId == null) {
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack()
+                    }
+                } else {
+                    val category by produceState<CategoryEntity?>(
+                        initialValue = null,
+                        key1 = categoryId
+                    ) {
+                        value = repository.getCategoryById(categoryId)
+                    }
+
+                    val pictograms by repository
+                        .getAllPictogramsByCategory(categoryId)
+                        .collectAsState(initial = emptyList())
+
+                    val scope = rememberCoroutineScope()
+
+                    if (category != null) {
+                        ManagePictogramsScreen(
+                            category = category!!,
+                            pictograms = pictograms,
+                            onBack = {
+                                navController.popBackStack()
+                            },
+                            onAddPictogram = { pictogram ->
+                                scope.launch {
+                                    repository.addPictogram(pictogram)
+                                }
+                            },
+                            onUpdatePictogram = { pictogram ->
+                                scope.launch {
+                                    repository.updatePictogram(pictogram)
+                                }
+                            },
+                            onTogglePictogram = { pictogram ->
+                                scope.launch {
+                                    repository.togglePictogram(pictogram)
+                                }
+                            },
+                            onDeletePictogram = { pictogramId ->
+                                scope.launch {
+                                    repository.deletePictogram(pictogramId)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // ADMINISTRAR EMOCIONES
+            composable(AppRoutes.TUTOR_EMOTIONS) {
+                val emotions by repository.allEmotions.collectAsState(
+                    initial = emptyList()
+                )
+                val scope = rememberCoroutineScope()
+
+                ManageEmotionsScreen(
+                    emotions = emotions,
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onAddEmotion = { emotion ->
+                        scope.launch {
+                            repository.addEmotion(emotion)
+                        }
+                    },
+                    onUpdateEmotion = { emotion ->
+                        scope.launch {
+                            repository.updateEmotion(emotion)
+                        }
+                    },
+                    onToggleEmotion = { emotion ->
+                        scope.launch {
+                            if (emotion.isActive) {
+                                repository.deactivateEmotion(emotion.id)
+                            } else {
+                                repository.updateEmotion(
+                                    emotion.copy(isActive = true)
+                                )
+                            }
+                        }
+                    },
+                    onDeleteEmotion = { emotionId ->
+                        scope.launch {
+                            repository.deleteEmotion(emotionId)
+                        }
+                    }
+                )
+            }
+
+            // ADMINISTRAR RUTINAS
+            composable(AppRoutes.TUTOR_ROUTINES) {
+                val tasks by repository.tasks.collectAsState(
+                    initial = emptyList()
+                )
+                val scope = rememberCoroutineScope()
+
+                ManageRoutinesScreen(
+                    tasks = tasks,
+                    onBack = {
+                        navController.popBackStack()
+                    },
+                    onAddTask = { task ->
+                        scope.launch {
+                            repository.addTask(task)
+                        }
+                    },
+                    onUpdateTask = { task ->
+                        scope.launch {
+                            repository.updateTask(task)
+                        }
+                    },
+                    onDeleteTask = { taskId ->
+                        scope.launch {
+                            repository.deleteTask(taskId)
+                        }
+                    }
                 )
             }
         }

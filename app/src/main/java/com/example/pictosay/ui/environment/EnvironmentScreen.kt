@@ -2,267 +2,237 @@
 package com.example.pictosay.ui.environment
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-
-// ========================================
-// MODELOS
-// ========================================
-
-data class EnvironmentItem(
-    val name: String,
-    val emoji: String,
-    val description: String
-)
-
-data class EnvironmentPictogram(
-    val name: String,
-    val emoji: String,
-    val phrase: String
-)
-
-// ========================================
-// AMBIENTES
-// ========================================
-
-private val environments = listOf(
-    EnvironmentItem("Mi cuarto", "🛏️", "Descansa y juega"),
-    EnvironmentItem("El baño", "🚿", "Cuida tu higiene"),
-    EnvironmentItem("La cocina", "🍳", "Alimentos y bebidas"),
-    EnvironmentItem("Mi casa y patio", "🏡", "Mi hogar"),
-    EnvironmentItem("Supermercado", "🛒", "Vamos de compras"),
-    EnvironmentItem("Mi escuela", "🏫", "Aprendemos juntos")
-)
-
-// ========================================
-// PICTOGRAMAS
-// ========================================
-
-private val pictograms = mapOf(
-    "Mi cuarto" to listOf(
-        EnvironmentPictogram("Cama", "🛏️", "Quiero dormir"),
-        EnvironmentPictogram("Almohada", "🛌", "Quiero mi almohada"),
-        EnvironmentPictogram("Juguete", "🧸", "Quiero jugar"),
-        EnvironmentPictogram("Ropa", "👕", "Quiero mi ropa")
-    ),
-
-    "El baño" to listOf(
-        EnvironmentPictogram("Baño", "🚽", "Quiero ir al baño"),
-        EnvironmentPictogram("Ducha", "🚿", "Quiero bañarme"),
-        EnvironmentPictogram("Jabón", "🧼", "Necesito jabón"),
-        EnvironmentPictogram("Cepillo", "🪥", "Quiero cepillarme")
-    ),
-
-    "La cocina" to listOf(
-        EnvironmentPictogram("Agua", "💧", "Quiero agua"),
-        EnvironmentPictogram("Manzana", "🍎", "Quiero una manzana"),
-        EnvironmentPictogram("Pan", "🍞", "Quiero pan"),
-        EnvironmentPictogram("Leche", "🥛", "Quiero leche")
-    ),
-
-    "Mi casa y patio" to listOf(
-        EnvironmentPictogram("Perro", "🐶", "Quiero ver al perro"),
-        EnvironmentPictogram("Gato", "🐱", "Quiero ver al gato"),
-        EnvironmentPictogram("Pelota", "⚽", "Quiero jugar"),
-        EnvironmentPictogram("Auto", "🚗", "Quiero salir")
-    ),
-
-    "Supermercado" to listOf(
-        EnvironmentPictogram("Plátano", "🍌", "Quiero un plátano"),
-        EnvironmentPictogram("Galletas", "🍪", "Quiero galletas"),
-        EnvironmentPictogram("Jugo", "🧃", "Quiero jugo"),
-        EnvironmentPictogram("Carrito", "🛒", "Vamos a comprar")
-    ),
-
-    "Mi escuela" to listOf(
-        EnvironmentPictogram("Mochila", "🎒", "Quiero mi mochila"),
-        EnvironmentPictogram("Libro", "📚", "Quiero leer"),
-        EnvironmentPictogram("Lápiz", "✏️", "Necesito un lápiz"),
-        EnvironmentPictogram("Maestra", "👩‍🏫", "Quiero hablar con mi maestra")
-    )
-)
-
-// ========================================
-// COLORES
-// ========================================
+import com.example.pictosay.data.local.CategoryEntity
+import com.example.pictosay.data.local.PictogramEntity
+import com.example.pictosay.data.repository.PicToSayRepository
 
 private val Blue = Color(0xFF3978D5)
 private val DarkBlue = Color(0xFF092B70)
 private val Background = Color(0xFFF7F9FC)
-private val LightBlue = Color(0xFFE8F0FF)
 
-// ========================================
-// PANTALLA PRINCIPAL
-// ========================================
+private val EnvironmentColors = listOf(
+    Color(0xFFE8F0FF),
+    Color(0xFFDDF8FC),
+    Color(0xFFFFF2C9),
+    Color(0xFFE2F8DF),
+    Color(0xFFF0E9FF),
+    Color(0xFFFFE8EF)
+)
 
 @Composable
 fun EnvironmentScreen(
+    repository: PicToSayRepository,
     onBack: () -> Unit,
     onSpeak: (String) -> Unit,
     onAddPhrase: (String) -> Unit
 ) {
+    val environments by repository.categories.collectAsState(
+        initial = emptyList()
+    )
 
     var selectedEnvironment by remember {
-        mutableStateOf<EnvironmentItem?>(null)
+        mutableStateOf<CategoryEntity?>(null)
     }
 
     var sceneMode by remember {
         mutableStateOf(false)
     }
 
-    var selectedPhrase by remember {
-        mutableStateOf("")
+    val currentItems by repository
+        .getPictogramsByCategory(selectedEnvironment?.id ?: -1)
+        .collectAsState(initial = emptyList())
+
+    // Actualizar el ambiente seleccionado si cambia en el panel del tutor.
+    LaunchedEffect(environments, selectedEnvironment?.id) {
+        val selectedId = selectedEnvironment?.id
+
+        if (selectedId != null) {
+            val updatedEnvironment = environments.find {
+                it.id == selectedId
+            }
+
+            if (updatedEnvironment == null) {
+                selectedEnvironment = null
+                sceneMode = false
+            } else {
+                selectedEnvironment = updatedEnvironment
+            }
+        }
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Background)
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
 
-        // ====================================
-        // ENCABEZADO
-        // ====================================
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-
-            TextButton(
-                onClick = {
-                    if (selectedEnvironment != null) {
-                        selectedEnvironment = null
-                        selectedPhrase = ""
-                        sceneMode = false
-                    } else {
-                        onBack()
-                    }
+        // BOTÓN REGRESAR
+        TextButton(
+            onClick = {
+                if (selectedEnvironment != null) {
+                    selectedEnvironment = null
+                    sceneMode = false
+                } else {
+                    onBack()
                 }
-            ) {
-                Text(
-                    "← Regresar",
-                    color = Blue
-                )
             }
-
+        ) {
             Text(
-                "Mis ambientes",
-                fontSize = 23.sp,
-                fontWeight = FontWeight.Bold,
-                color = DarkBlue
+                text = "← Regresar",
+                color = Blue,
+                fontSize = 16.sp
             )
         }
 
-        Spacer(Modifier.height(12.dp))
-
-        // ====================================
+        // =====================================
         // LISTA DE AMBIENTES
-        // ====================================
+        // =====================================
 
         if (selectedEnvironment == null) {
 
-            environments.forEach { environment ->
+            Text(
+                text = "Mis ambientes",
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 14.dp),
+                fontSize = 26.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkBlue
+            )
 
-                Card(
-                    onClick = {
-                        selectedEnvironment = environment
-                        selectedPhrase = ""
-                        sceneMode = false
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White
-                    ),
-                    elevation = CardDefaults.cardElevation(
-                        defaultElevation = 2.dp
+            if (environments.isEmpty()) {
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Aún no hay ambientes disponibles. 💙",
+                        color = DarkBlue,
+                        fontSize = 17.sp
                     )
+                }
+
+            } else {
+
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
 
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    items(
+                        count = environments.size,
+                        key = { index -> environments[index].id }
+                    ) { index ->
 
-                        Text(
-                            environment.emoji,
-                            fontSize = 38.sp
-                        )
+                        val environment = environments[index]
 
-                        Spacer(Modifier.width(15.dp))
+                        val backgroundColor =
+                            EnvironmentColors[index % EnvironmentColors.size]
 
-                        Column {
-
-                            Text(
-                                environment.name,
-                                fontWeight = FontWeight.Bold,
-                                color = DarkBlue,
-                                fontSize = 18.sp
+                        Card(
+                            onClick = {
+                                selectedEnvironment = environment
+                                sceneMode = false
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = backgroundColor
+                            ),
+                            elevation = CardDefaults.cardElevation(
+                                defaultElevation = 2.dp
                             )
+                        ) {
 
-                            Text(
-                                environment.description,
-                                color = Color.Gray
-                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(17.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+
+                                Text(
+                                    text = environment.emoji,
+                                    fontSize = 40.sp
+                                )
+
+                                Spacer(Modifier.width(16.dp))
+
+                                Column(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+
+                                    Text(
+                                        text = environment.name,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkBlue
+                                    )
+
+                                    Text(
+                                        text = environment.description,
+                                        fontSize = 14.sp,
+                                        color = Color.DarkGray
+                                    )
+                                }
+
+                                Text(
+                                    text = "›",
+                                    fontSize = 32.sp,
+                                    color = DarkBlue
+                                )
+                            }
                         }
-
-                        Spacer(Modifier.weight(1f))
-
-                        Text(
-                            "›",
-                            color = Blue,
-                            fontSize = 30.sp
-                        )
                     }
                 }
             }
 
         } else {
 
-            // ====================================
+            // =====================================
             // AMBIENTE SELECCIONADO
-            // ====================================
+            // =====================================
+
+            val environment = selectedEnvironment!!
 
             Text(
-                "${selectedEnvironment!!.emoji} ${selectedEnvironment!!.name}",
-                fontSize = 23.sp,
+                text = "${environment.emoji} ${environment.name}",
+                fontSize = 25.sp,
                 fontWeight = FontWeight.Bold,
-                color = DarkBlue
+                color = DarkBlue,
+                modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            Spacer(Modifier.height(12.dp))
-
-            // ====================================
             // SELECTOR DE VISTA
-            // ====================================
-
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier.fillMaxWidth()
             ) {
 
                 SegmentedButton(
                     selected = !sceneMode,
-                    onClick = {
-                        sceneMode = false
-                    },
+                    onClick = { sceneMode = false },
                     shape = RoundedCornerShape(
-                        topStart = 12.dp,
-                        bottomStart = 12.dp
+                        topStart = 14.dp,
+                        bottomStart = 14.dp
                     )
                 ) {
                     Text("Pictogramas")
@@ -270,221 +240,224 @@ fun EnvironmentScreen(
 
                 SegmentedButton(
                     selected = sceneMode,
-                    onClick = {
-                        sceneMode = true
-                    },
+                    onClick = { sceneMode = true },
                     shape = RoundedCornerShape(
-                        topEnd = 12.dp,
-                        bottomEnd = 12.dp
+                        topEnd = 14.dp,
+                        bottomEnd = 14.dp
                     )
                 ) {
                     Text("Escena")
                 }
             }
 
-            Spacer(Modifier.height(15.dp))
+            Spacer(Modifier.height(16.dp))
 
-            val items = pictograms[
-                selectedEnvironment!!.name
-            ].orEmpty()
+            // =====================================
+            // CONTENIDO
+            // =====================================
 
-            // ====================================
-            // MODO ESCENA
-            // ====================================
+            if (currentItems.isEmpty()) {
 
-            if (sceneMode) {
-
-                Card(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(20.dp)
+                    contentAlignment = Alignment.Center
                 ) {
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp)
-                            .background(
-                                LightBlue,
-                                RoundedCornerShape(16.dp)
-                            )
-                    ) {
-
-                        // Ilustración del ambiente
-
-                        Text(
-                            selectedEnvironment!!.emoji,
-                            fontSize = 75.sp,
-                            modifier = Modifier.align(
-                                Alignment.TopCenter
-                            )
-                        )
-
-                        // Objetos interactivos
-
-                        items.forEachIndexed { index, item ->
-
-                            val positions = listOf(
-                                Alignment.CenterStart,
-                                Alignment.CenterEnd,
-                                Alignment.BottomStart,
-                                Alignment.BottomEnd
-                            )
-
-                            Column(
-                                modifier = Modifier
-                                    .align(positions[index % 4])
-                                    .clickable {
-
-                                        // Guardar selección
-                                        selectedPhrase = item.phrase
-
-                                        // Enviar al constructor
-                                        onAddPhrase(item.phrase)
-
-                                        // REPRODUCIR VOZ
-                                        onSpeak(item.phrase)
-                                    }
-                                    .padding(12.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-
-                                Text(
-                                    item.emoji,
-                                    fontSize = 42.sp
-                                )
-
-                                Text(
-                                    item.name,
-                                    color = DarkBlue,
-                                    fontSize = 15.sp
-                                )
-                            }
-                        }
-                    }
+                    Text(
+                        text = "Este ambiente todavía no tiene pictogramas. 💙",
+                        color = DarkBlue,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
+
+            } else if (sceneMode) {
+
+                SceneEnvironment(
+                    items = currentItems,
+                    onSpeak = onSpeak,
+                    onAddPhrase = onAddPhrase,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
 
             } else {
 
-                // ====================================
-                // MODO PICTOGRAMAS
-                // ====================================
-
+                // VISTA DE PICTOGRAMAS
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
 
-                    items(items) { item ->
+                    items(
+                        items = currentItems,
+                        key = { it.id }
+                    ) { item ->
 
-                        Card(
+                        PictogramTile(
+                            item = item,
                             onClick = {
-
-                                // Guardar selección
-                                selectedPhrase = item.phrase
-
-                                // Enviar al constructor
-                                onAddPhrase(item.phrase)
-
-                                // REPRODUCIR VOZ
-                                onSpeak(item.phrase)
-                            },
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = Color.White
-                            ),
-                            elevation = CardDefaults.cardElevation(
-                                defaultElevation = 2.dp
-                            )
-                        ) {
-
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(18.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-
-                                Text(
-                                    item.emoji,
-                                    fontSize = 45.sp
-                                )
-
-                                Spacer(Modifier.height(8.dp))
-
-                                Text(
-                                    item.name,
-                                    color = DarkBlue,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                onSpeak(item.speechText)
+                                onAddPhrase(item.speechText)
                             }
-                        }
+                        )
                     }
                 }
             }
+        }
+    }
+}
 
-            // ====================================
-            // FRASE SELECCIONADA
-            // ====================================
+// =========================================
+// TARJETA INDIVIDUAL DE PICTOGRAMA
+// =========================================
 
-            if (selectedPhrase.isNotBlank()) {
+@Composable
+private fun PictogramTile(
+    item: PictogramEntity,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(145.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color.White
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = 3.dp
+        )
+    ) {
 
-                Spacer(Modifier.height(12.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+
+            Text(
+                text = item.emoji,
+                fontSize = 43.sp
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                text = item.name,
+                color = DarkBlue,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+// =========================================
+// ESCENA DEL AMBIENTE
+// =========================================
+
+@Composable
+private fun SceneEnvironment(
+    items: List<PictogramEntity>,
+    onSpeak: (String) -> Unit,
+    onAddPhrase: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color(0xFFFFF2D6))
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        // ENCABEZADO DE ESCENA
+        Text(
+            text = "✨",
+            fontSize = 38.sp
+        )
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = "Toca los objetos para escuchar",
+            fontSize = 16.sp,
+            color = Color(0xFF30456B),
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(Modifier.height(18.dp))
+
+        // CUADRÍCULA CON TARJETAS SEPARADAS
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(
+                horizontal = 2.dp,
+                vertical = 4.dp
+            )
+        ) {
+
+            items(
+                items = items,
+                key = { it.id }
+            ) { item ->
 
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        onSpeak(item.speechText)
+                        onAddPhrase(item.speechText)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(170.dp),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = LightBlue
+                        containerColor = Color.White
                     ),
-                    shape = RoundedCornerShape(18.dp)
+                    elevation = CardDefaults.cardElevation(
+                        defaultElevation = 4.dp
+                    )
                 ) {
 
                     Column(
-                        modifier = Modifier.padding(12.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
 
                         Text(
-                            "Seleccionado: $selectedPhrase",
-                            color = DarkBlue,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Medium
+                            text = item.emoji,
+                            fontSize = 46.sp
                         )
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(12.dp))
 
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-
-                            TextButton(
-                                onClick = {
-                                    // Volver a escuchar
-                                    onSpeak(selectedPhrase)
-                                }
-                            ) {
-                                Text(
-                                    "🔊 Escuchar",
-                                    color = Blue
-                                )
-                            }
-
-                            TextButton(
-                                onClick = {
-                                    selectedPhrase = ""
-                                }
-                            ) {
-                                Text(
-                                    "Limpiar",
-                                    color = DarkBlue
-                                )
-                            }
-                        }
+                        Text(
+                            text = item.name,
+                            fontSize = 17.sp,
+                            color = DarkBlue,
+                            textAlign = TextAlign.Center,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             }
